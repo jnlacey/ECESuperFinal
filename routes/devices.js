@@ -8,6 +8,7 @@ var jwt = require("jwt-simple");
 /* Authenticate user */
 var secret = fs.readFileSync(__dirname + '/../../jwtkey').toString();
 
+
 // Function to generate a random apikey consisting of 32 characters
 function getNewApikey() {
     var newApikey = "";
@@ -21,8 +22,16 @@ function getNewApikey() {
 }
 
 
-//Device Report
+/*
+**  FUNCTIONALITY: POST request that creates a new device report with given data.
+**
+**  INPUTS: API key, device ID, time, latitude, longitude, speed, uv level, session number
+**
+**  OUTPUTS: 401 response for error, 201 for success
+*/
 router.post('/report', (req, res, next) => {
+	console.log(req.body.deviceID);
+	var api = req.body.apiKey;
 	var reportedDevice = Device.findOne({"deviceId": req.body.deviceID})
 		.exec()
 		.then(docs => {
@@ -32,43 +41,58 @@ router.post('/report', (req, res, next) => {
 
 		}
 		else {
-			console.log(docs.deviceId);
-		console.log("That was an ID");
-		const newDeviceReport = new DeviceReport({
-		deviceID: req.body.deviceID,
-    			GPS_lat:  req.body.GPS_lat,
-    			GPS_lon:  req.body.GPS_lon,
-    			GPS_speed: req.body.GPS_speed,
-    			uvLevel: req.body.uvLevel,
-    			session: req.body.session
-    		    });
-		console.log(newDeviceReport.deviceID);
-		console.log(newDeviceReport.GPS_lat);
-		console.log(newDeviceReport.GPS_lon);
-		console.log(newDeviceReport.GPS_speed);
-		console.log(newDeviceReport.uvLevel);
-		console.log(newDeviceReport.session);
-		console.log(newDeviceReport.time);
-		newDeviceReport.save(function(err, deviceReport) {
-			console.log(err);
-			console.log("Hmm");
-			if(err != null) {
-				console.log("hi");
-				console.log(err.errmsg);
+			if(api != docs.apikey) {
+				res.status(401).json({success: false, message: "Invalid APIKEY"});
+				console.log(docs.apikey);
+				console.log(api);
 			}
 			else {
-		
+				console.log(docs.deviceId);
+				console.log("That was an ID");
+				var tempDate = new Date(0);
+				tempDate.setUTCSeconds(req.body.time);
+				const newDeviceReport = new DeviceReport({
+					deviceID: req.body.deviceID,
+    				GPS_lat:  req.body.GPS_lat,
+    				GPS_lon:  req.body.GPS_lon,
+    				GPS_speed: req.body.GPS_speed,
+    				uvLevel: req.body.uvLevel,
+    				session: req.body.session,
+					time: tempDate
+    			});
+				console.log(newDeviceReport.deviceID);
+				console.log(newDeviceReport.GPS_lat);
+				console.log(newDeviceReport.GPS_lon);
+				console.log(newDeviceReport.GPS_speed);
+				console.log(newDeviceReport.uvLevel);
+				console.log(newDeviceReport.session);
+				console.log(newDeviceReport.time);
+				newDeviceReport.save(function(err, deviceReport) {
+					console.log(err);
+					console.log("Hmm");
+					if(err != null) {
+						console.log("hi");
+						console.log(err.errmsg);
+					}
+					else {
+				
+					}
+					res.status(201).json({success: true, message: "Successful report"})
+				});
 			}
-			res.status(201).json({success: true, message: "Don't trust this lol"})
-		});
-	}
-	//res.status(200).json(docs);		
+		}		
 	});
-	
 });
 
+
+/*
+**  FUNCTIONALITY: GET request that returns all device reports in the database
+**
+**  INPUTS: None
+**
+**  OUTPUTS: 200 response code and all device reports
+*/
 router.get("/getall", (req, res, next) => {
-	//const naame = req.params.name;
 	DeviceReport.find()
 		.exec()
 		.then(docs => {
@@ -77,6 +101,14 @@ router.get("/getall", (req, res, next) => {
 	});
 });
 
+
+/*
+**  FUNCTIONALITY: GET request that returns all devices
+**
+**  INPUTS: None
+**
+**  OUTPUTS: 200 response code and all devices
+*/
 router.get("/getalldevices", (req, res, next) => {
 	Device.find()
 		.exec()
@@ -87,7 +119,13 @@ router.get("/getalldevices", (req, res, next) => {
 });
 
 
-// GET request return one or "all" devices registered and last time of contact.
+/*
+**  FUNCTIONALITY: GET request that returns one or "all" devices registered and last time of contact.
+**
+**  INPUTS: Device id
+**
+**  OUTPUTS: array object with device id and last contact
+*/
 router.get('/status/:devid', function(req, res, next) {
     var deviceId = req.params.devid;
     var responseJson = { devices: [] };
@@ -115,6 +153,14 @@ router.get('/status/:devid', function(req, res, next) {
     });
 });
 
+
+/*
+**  FUNCTIONALITY: POST request that registers a device
+**
+**  INPUTS: Token, email, device id
+**
+**  OUTPUTS: 201 and a success messsage for success
+*/
 router.post('/register', function(req, res, next) {
     var responseJson = {
         registered: false,
@@ -173,8 +219,6 @@ router.post('/register', function(req, res, next) {
                 if (err) {
                     console.log("Error: " + err);
                     responseJson.message = err;
-                    // This following is equivalent to:
-                    //     res.status(400).send(JSON.stringify(responseJson));
                     return res.status(400).json(responseJson);
                 }
                 else {
@@ -188,45 +232,40 @@ router.post('/register', function(req, res, next) {
     });
 });
 
+
+/*
+**  FUNCTIONALITY: GET request that searches for a device with a device id and returns all data pertaining
+**                 to all of its device reports/
+**
+**  INPUTS: Device id
+**
+**  OUTPUTS: array object with all device reports data
+*/
 router.get('/getdata', function(req, res, next) {
 	var htmlString = "";
 	var returnData = {};
 	returnData["deviceReports"] = [];
-	var theDeviceIDs = req.query.theID;
-	console.log("gettingData");
-	//one registered device ID should be passed over at a time. Start a new table row here?
-	for (var aDeviceID of theDeviceIDs) {
-		console.log(aDeviceID);
+	var theDeviceID = req.query.theID;
 	
-	   	DeviceReport.find({deviceID: aDeviceID})
-         	.exec()
-		.then(docs => {
- 				for(var doc of docs) {
-					var singleReport = {
-						 "deviceID": doc.deviceID,
-    						 "GPS_lat": doc.GPS_lat,
-   						 "GPS_lon": doc.GPS_lon,
-						 "GPS_speed": doc.GPS_speed,
-   						 "uvLevel": doc.uvLevel,
-  						 "session": doc.session
-					};
-					
-					returnData["deviceReports"].push(singleReport);
-				
-					
-					console.log(singleReport);
-					console.log(doc.uvLevel);
-				}
-					
-				console.log("hello world");
-				console.log(JSON.stringify(returnData));
-				return res.status(200).json(JSON.stringify(returnData));
+	console.log(theDeviceID);
 		
-		});
-	
-	}
-	
-	
+	DeviceReport.find({deviceID: theDeviceID}).sort('time')
+       	.exec()
+		.then(docs => {
+ 			for(var doc of docs) {
+				var singleReport = {
+					 "deviceID": doc.deviceID,
+    				 "GPS_lat": doc.GPS_lat,
+   					 "GPS_lon": doc.GPS_lon,
+					 "GPS_speed": doc.GPS_speed,
+   					 "uvLevel": doc.uvLevel,
+  					 "session": doc.session					};
+				
+				returnData["deviceReports"].push(singleReport);
+				console.log(singleReport.GPS_lat);
+			}			
+		res.status(200).json(returnData);			
+	});
 });
 
 
